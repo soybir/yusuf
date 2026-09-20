@@ -1,0 +1,4 @@
+ChatGPT ↔ GitHub bağlantı testi başarılı.
+
+Bu dosya ChatGPT tarafından GitHub bağlantısının yazma yetkisini doğrulamak amacıyla oluşturuldu.
+Tarih: 20 Eylül 2026
