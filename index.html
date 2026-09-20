@@ -56,6 +56,8 @@
     .band-mark { position: absolute; z-index: 3; background: #d92d20; box-shadow: 0 0 0 1px rgba(255,255,255,.55); }
     .band-horizontal { right: 0; bottom: 0; left: 0; height: 4px; }
     .band-vertical { top: 0; right: 0; bottom: 0; width: 4px; }
+    .grain-arrow { position: absolute; z-index: 2; right: 7px; bottom: 5px; color: rgba(23,33,43,.78); font-size: .9rem; font-weight: 900; line-height: 1; }
+    .grain-arrow-vertical { top: 50%; right: auto; bottom: auto; left: 5px; transform: translateY(-50%) rotate(90deg); }
     .legend-row { display: flex; align-items: center; gap: 7px; margin-top: 7px; font-size: .85rem; }
     .legend-band { width: 24px; height: 4px; border-radius: 2px; background: #d92d20; }
     .piece:nth-child(4n+1) { background: rgba(105, 182, 255, .82); }
@@ -146,10 +148,11 @@
               <input id="kerf" type="number" min="0" step="0.1" inputmode="decimal" value="0.4">
             </div>
           </div>
-          <label class="check-row" for="allow-rotation">
-            <input id="allow-rotation" type="checkbox">
-            Parçalar 90° döndürülebilir
-          </label>
+          <label for="grain-mode">Damar yönü</label>
+          <select id="grain-mode">
+            <option value="locked">Damar yönünü koru — parçaları döndürme</option>
+            <option value="free">Damar önemli değil — 90° döndürebilir</option>
+          </select>
           <button type="button" id="optimize-button">Yatar testereye yerleştir</button>
           <p id="sheet-error" role="alert" hidden></p>
           <div id="sheet-result" hidden>
@@ -366,7 +369,8 @@
       const sheetLength = Number(document.querySelector('#sheet-length').value);
       const sheetWidth = Number(document.querySelector('#sheet-width').value);
       const kerf = Number(document.querySelector('#kerf').value);
-      const allowRotation = document.querySelector('#allow-rotation').checked;
+      const grainMode = document.querySelector('#grain-mode').value;
+      const allowRotation = grainMode === 'free';
 
       if (!currentCutParts.length) {
         sheetError.textContent = 'Önce kesim listesini çıkar.';
@@ -425,7 +429,8 @@
 
       const totalPartArea = pieces.reduce((total, piece) => total + piece.area, 0);
       const efficiency = totalPartArea / (sheetList.length * sheetLength * sheetWidth) * 100;
-      sheetSummary.innerHTML = `Gerekli tabaka: <strong>${sheetList.length}</strong><br>Malzeme kullanım oranı: <strong>%${format(efficiency)}</strong><br>Kesim tipi: <strong>Yatar testere — tam boy düz kesim</strong><div class="legend-row"><span class="legend-band"></span>Kırmızı çizgi: ön kenar bandı · Siyah numara: kesim sırası</div>`;
+      const grainText = grainMode === 'locked' ? 'Korunuyor — tabaka boyu yönünde' : 'Serbest — parçalar dönebilir';
+      sheetSummary.innerHTML = `Gerekli tabaka: <strong>${sheetList.length}</strong><br>Malzeme kullanım oranı: <strong>%${format(efficiency)}</strong><br>Kesim tipi: <strong>Yatar testere — tam boy düz kesim</strong><br>Damar yönü: <strong>${grainText}</strong><div class="legend-row"><span class="legend-band"></span>Kırmızı çizgi: ön kenar bandı · Siyah numara: kesim sırası · ↔ damar yönü</div>`;
       sheetsContainer.replaceChildren();
       sheetList.forEach((sheet, index) => {
         const card = document.createElement('div');
@@ -443,7 +448,7 @@
           element.style.top = `${piece.y / sheetWidth * 100}%`;
           element.style.width = `${piece.displayLength / sheetLength * 100}%`;
           element.style.height = `${piece.displayWidth / sheetWidth * 100}%`;
-          element.setAttribute('aria-label', `${piece.cutOrder}. kesim, ${piece.name}, ${format(piece.displayLength)} × ${format(piece.displayWidth)} santimetre, ön kenar bantlı`);
+          element.setAttribute('aria-label', `${piece.cutOrder}. kesim, ${piece.name}, ${format(piece.displayLength)} × ${format(piece.displayWidth)} santimetre, ön kenar bantlı, damar yönü ${piece.rotated ? 'dikey' : 'yatay'}`);
           const order = document.createElement('span');
           order.className = 'cut-order';
           order.textContent = String(piece.cutOrder);
@@ -459,7 +464,11 @@
           const band = document.createElement('span');
           band.className = `band-mark ${piece.rotated ? 'band-vertical' : 'band-horizontal'}`;
           band.setAttribute('aria-hidden', 'true');
-          element.append(name, lengthLabel, widthLabel, order, band);
+          const grain = document.createElement('span');
+          grain.className = `grain-arrow ${piece.rotated ? 'grain-arrow-vertical' : ''}`;
+          grain.textContent = '↔';
+          grain.setAttribute('aria-hidden', 'true');
+          element.append(name, lengthLabel, widthLabel, order, band, grain);
           board.append(element);
         });
         card.append(title, board);
