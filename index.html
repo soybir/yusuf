@@ -4,28 +4,40 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#17212b">
+  <meta name="description" content="Raf delikleri, dolap kesim listesi ve ön kenar bandını hesaplar.">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2317212b'/%3E%3Ccircle cx='20' cy='32' r='6' fill='%23fff'/%3E%3Ccircle cx='44' cy='22' r='5' fill='%23fff'/%3E%3Ccircle cx='44' cy='42' r='5' fill='%23fff'/%3E%3C/svg%3E">
   <title>Yusuf Mobilya Hesaplama</title>
   <style>
     :root { color-scheme: light; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
     * { box-sizing: border-box; }
     body { margin: 0; background: #f2f4f7; color: #17212b; }
-    main { width: min(100% - 28px, 620px); margin: 0 auto; padding: 28px 0 48px; }
-    header { margin-bottom: 20px; }
-    h1 { margin: 0 0 6px; font-size: 28px; }
-    header p { margin: 0; color: #5d6773; }
-    .card { background: white; border-radius: 18px; padding: 20px; box-shadow: 0 8px 28px rgba(23,33,43,.08); }
-    label { display: block; margin: 15px 0 7px; font-weight: 700; }
-    input, select, button { width: 100%; min-height: 50px; border-radius: 12px; font: inherit; }
-    input, select { border: 1px solid #c9d1d9; padding: 0 14px; background: white; font-size: 18px; }
-    button { margin-top: 20px; border: 0; background: #17212b; color: white; font-weight: 800; font-size: 18px; }
+    main { width: min(100% - 28px, 620px); margin: 0 auto; padding: 24px 0 48px; }
+    header { margin-bottom: 18px; }
+    h1 { margin: 0 0 5px; font-size: 1.75rem; }
+    header p { margin: 0; color: #5d6773; font-size: 1rem; }
+    .tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; padding: 5px; background: #dfe5eb; border-radius: 14px; }
+    .tab { min-height: 44px; margin: 0; background: transparent; color: #33404d; font-size: .95rem; }
+    .tab.active { background: #fff; color: #17212b; box-shadow: 0 2px 8px rgba(23,33,43,.12); }
+    .card { background: #fff; border-radius: 18px; padding: 20px; box-shadow: 0 8px 28px rgba(23,33,43,.09); }
+    label { display: block; margin: 15px 0 7px; font-weight: 750; font-size: 1rem; }
+    input, select, button { width: 100%; min-height: 52px; border-radius: 12px; font: inherit; }
+    input, select { border: 1px solid #c9d1d9; padding: 0 14px; background: #fff; font-size: 1.1rem; }
+    button { margin-top: 20px; border: 0; background: #17212b; color: #fff; font-weight: 800; font-size: 1.1rem; }
     button:active { transform: scale(.99); }
-    #error { color: #b42318; font-weight: 700; margin-top: 14px; }
+    #error, #cabinet-error { color: #b42318; font-weight: 700; margin-top: 14px; }
     #result { margin-top: 18px; }
-    .summary { padding: 14px; border-radius: 12px; background: #eef6ff; font-weight: 700; }
+    .summary { padding: 14px; border-radius: 12px; background: #eaf4ff; font-weight: 750; }
     .row { display: grid; grid-template-columns: 48px 1fr; gap: 10px; align-items: center; padding: 13px 0; border-bottom: 1px solid #e8ebef; }
-    .badge { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 50%; background: #17212b; color: white; font-weight: 800; }
-    .measure { font-size: 17px; line-height: 1.55; }
-    .muted { color: #66717e; font-size: 14px; }
+    .badge { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 50%; background: #17212b; color: #fff; font-weight: 800; }
+    .measure { font-size: 1.05rem; line-height: 1.55; }
+    .muted { color: #66717e; font-size: .9rem; }
+    .rule { margin: 14px 0 0; padding: 12px; border-radius: 10px; background: #f2f4f7; color: #4f5b67; font-size: .9rem; line-height: 1.5; }
+    .table-wrap { overflow-x: auto; margin-top: 14px; }
+    table { width: 100%; border-collapse: collapse; font-size: .95rem; }
+    th, td { padding: 11px 8px; border-bottom: 1px solid #e5e9ed; text-align: start; white-space: nowrap; }
+    th { color: #5d6773; font-size: .85rem; }
+    td:first-child { font-weight: 700; }
+    .band-total { margin-top: 15px; padding: 14px; border-radius: 12px; background: #eef8ef; line-height: 1.55; }
     [hidden] { display: none !important; }
   </style>
 </head>
@@ -33,25 +45,25 @@
   <main>
     <header>
       <h1>Mobilya Delik Hesaplama</h1>
-      <p>Yusuf Soybir — Tek Delik / Üçlü Delik</p>
+      <p>Delik ölçüsü ve kesim listesi</p>
     </header>
-    <section class="card">
-      <form id="calculator">
+    <nav class="tabs" aria-label="Hesaplama türü">
+      <button type="button" class="tab active" data-panel="hole-panel">Delik sistemi</button>
+      <button type="button" class="tab" data-panel="cabinet-panel">Kesim listesi</button>
+    </nav>
+    <section class="card panel" id="hole-panel">
+      <form id="hole-calculator">
         <label for="height">İç yükseklik (cm)</label>
         <input id="height" name="height" type="number" min="0.01" step="0.01" inputmode="decimal" placeholder="Örnek: 176.20" required>
-
         <label for="shelves">Raf sayısı</label>
         <input id="shelves" name="shelves" type="number" min="1" step="1" inputmode="numeric" placeholder="Örnek: 4" required>
-
         <label for="thickness">Raf kalınlığı (cm)</label>
         <input id="thickness" name="thickness" type="number" min="0.01" step="0.01" inputmode="decimal" value="1.90" required>
-
         <label for="pattern">Delik sistemi</label>
         <select id="pattern" name="pattern">
           <option value="single">Tek Delik</option>
           <option value="triple">Üçlü Delik (5 aşağı, 7 yukarı)</option>
         </select>
-
         <button type="submit">Hesapla</button>
       </form>
       <p id="error" role="alert" hidden></p>
@@ -60,24 +72,65 @@
         <div id="rows"></div>
       </div>
     </section>
+    <section class="card panel" id="cabinet-panel" hidden>
+      <form id="cabinet-calculator">
+        <label for="cabinet-type">Dolap türü</label>
+        <select id="cabinet-type" name="cabinet-type">
+          <option value="base">Alt dolap</option>
+          <option value="upper">Üst dolap</option>
+        </select>
+        <label for="cabinet-width">Genişlik (cm)</label>
+        <input id="cabinet-width" name="cabinet-width" type="number" min="0.01" step="0.01" inputmode="decimal" placeholder="Örnek: 60" required>
+        <label for="cabinet-height">Yükseklik (cm)</label>
+        <input id="cabinet-height" name="cabinet-height" type="number" min="0.01" step="0.01" inputmode="decimal" placeholder="Örnek: 72" required>
+        <label for="cabinet-depth">Derinlik (cm)</label>
+        <input id="cabinet-depth" name="cabinet-depth" type="number" min="0.01" step="0.01" inputmode="decimal" placeholder="Örnek: 56" required>
+        <label for="cabinet-thickness">Panel kalınlığı (cm)</label>
+        <input id="cabinet-thickness" name="cabinet-thickness" type="number" min="0.01" step="0.01" inputmode="decimal" value="1.90" required>
+        <label for="cabinet-shelves">Raf sayısı</label>
+        <input id="cabinet-shelves" name="cabinet-shelves" type="number" min="0" step="1" inputmode="numeric" value="1" required>
+        <label for="cabinet-quantity">Dolap adedi</label>
+        <input id="cabinet-quantity" name="cabinet-quantity" type="number" min="1" step="1" inputmode="numeric" value="1" required>
+        <button type="submit">Kesim listesini çıkar</button>
+      </form>
+      <p id="cabinet-error" role="alert" hidden></p>
+      <div id="cabinet-result" aria-live="polite" hidden>
+        <p class="rule" id="cabinet-rule"></p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Parça</th><th>Adet</th><th>Boy × En</th><th>Ön bant</th></tr></thead>
+            <tbody id="cut-rows"></tbody>
+          </table>
+        </div>
+        <div class="band-total" id="band-total"></div>
+        <p class="muted">Ölçüler cm’dir. Bant hesabı yalnız parçaların ön kenarları içindir.</p>
+      </div>
+    </section>
   </main>
   <script>
-    const form = document.querySelector('#calculator');
+    const holeForm = document.querySelector('#hole-calculator');
     const errorBox = document.querySelector('#error');
     const result = document.querySelector('#result');
     const summary = document.querySelector('#summary');
     const rows = document.querySelector('#rows');
     const format = (value) => value.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-    form.addEventListener('submit', (event) => {
+    document.querySelectorAll('.tab').forEach((tab) => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach((item) => item.classList.toggle('active', item === tab));
+        document.querySelectorAll('.panel').forEach((panel) => { panel.hidden = panel.id !== tab.dataset.panel; });
+      });
+    });
+
+    holeForm.addEventListener('submit', (event) => {
       event.preventDefault();
       errorBox.hidden = true;
       result.hidden = true;
-
-      const height = Number(form.height.value.replace(',', '.'));
-      const shelfCount = Number(form.shelves.value);
-      const thickness = Number(form.thickness.value.replace(',', '.'));
-      const pattern = form.pattern.value;
+      const data = new FormData(holeForm);
+      const height = Number(String(data.get('height')).replace(',', '.'));
+      const shelfCount = Number(data.get('shelves'));
+      const thickness = Number(String(data.get('thickness')).replace(',', '.'));
+      const pattern = data.get('pattern');
 
       if (!Number.isFinite(height) || height <= 0 || !Number.isInteger(shelfCount) || shelfCount <= 0 ||
           !Number.isFinite(thickness) || thickness <= 0) {
@@ -95,17 +148,14 @@
 
       summary.textContent = `Net boşluk: ${format(clearGap)} cm`;
       rows.replaceChildren();
-
       for (let index = 0; index < shelfCount; index += 1) {
         const shelfNumber = index + 1;
         const centre = shelfNumber * clearGap + index * thickness;
         const row = document.createElement('div');
         row.className = 'row';
-
         const badge = document.createElement('div');
         badge.className = 'badge';
         badge.textContent = String(shelfNumber);
-
         const measure = document.createElement('div');
         measure.className = 'measure';
         if (pattern === 'triple') {
@@ -113,16 +163,87 @@
         } else {
           measure.innerHTML = `Delik merkezi: <strong>${format(centre)} cm</strong>`;
         }
-
         row.append(badge, measure);
         rows.append(row);
       }
-
       const note = document.createElement('p');
       note.className = 'muted';
       note.textContent = 'Bütün ölçüler zeminden alınır.';
       rows.append(note);
       result.hidden = false;
+    });
+
+    const cabinetForm = document.querySelector('#cabinet-calculator');
+    const cabinetError = document.querySelector('#cabinet-error');
+    const cabinetResult = document.querySelector('#cabinet-result');
+    const cabinetRule = document.querySelector('#cabinet-rule');
+    const cutRows = document.querySelector('#cut-rows');
+    const bandTotal = document.querySelector('#band-total');
+
+    cabinetForm.addEventListener('submit', (event) => {
+      event.preventDefault();
+      cabinetError.hidden = true;
+      cabinetResult.hidden = true;
+      const data = new FormData(cabinetForm);
+      const type = data.get('cabinet-type');
+      const width = Number(data.get('cabinet-width'));
+      const height = Number(data.get('cabinet-height'));
+      const depth = Number(data.get('cabinet-depth'));
+      const thickness = Number(data.get('cabinet-thickness'));
+      const shelfCount = Number(data.get('cabinet-shelves'));
+      const cabinetQuantity = Number(data.get('cabinet-quantity'));
+
+      if (![width, height, depth, thickness].every((value) => Number.isFinite(value) && value > 0) ||
+          !Number.isInteger(shelfCount) || shelfCount < 0 ||
+          !Number.isInteger(cabinetQuantity) || cabinetQuantity < 1) {
+        cabinetError.textContent = 'Lütfen bütün ölçüleri ve adetleri doğru gir.';
+        cabinetError.hidden = false;
+        return;
+      }
+
+      const innerWidth = width - 2 * thickness;
+      const sideHeight = type === 'base' ? height - thickness : height;
+      if (innerWidth <= 0 || sideHeight <= 0) {
+        cabinetError.textContent = 'Panel kalınlığı dolap ölçülerine göre fazla.';
+        cabinetError.hidden = false;
+        return;
+      }
+
+      const parts = type === 'base'
+        ? [
+            { name: 'Yan', quantity: 2, length: sideHeight, width: depth },
+            { name: 'Alt', quantity: 1, length: width, width: depth },
+            { name: 'Üst', quantity: 1, length: innerWidth, width: depth },
+            { name: 'Raf', quantity: shelfCount, length: innerWidth, width: depth },
+          ]
+        : [
+            { name: 'Yan', quantity: 2, length: height, width: depth },
+            { name: 'Alt / Üst', quantity: 2, length: innerWidth, width: depth },
+            { name: 'Raf', quantity: shelfCount, length: innerWidth, width: depth },
+          ];
+
+      cutRows.replaceChildren();
+      let totalBandCm = 0;
+      parts.filter((part) => part.quantity > 0).forEach((part) => {
+        const quantity = part.quantity * cabinetQuantity;
+        const bandCm = part.length * quantity;
+        totalBandCm += bandCm;
+        const row = document.createElement('tr');
+        [part.name, String(quantity), `${format(part.length)} × ${format(part.width)}`, `${format(bandCm)} cm`]
+          .forEach((value) => {
+            const cell = document.createElement('td');
+            cell.textContent = value;
+            row.append(cell);
+          });
+        cutRows.append(row);
+      });
+
+      cabinetRule.textContent = type === 'base'
+        ? 'Alt dolap: alt tam boy; yanlar bir panel kısa; üst ve raflar yanların arasında.'
+        : 'Üst dolap: yanlar tam boy; alt, üst ve raflar yanların arasında.';
+      const bandMetres = totalBandCm / 100;
+      bandTotal.innerHTML = `Toplam ön kenar bandı: <strong>${format(bandMetres)} m</strong><br>%10 fireli: <strong>${format(bandMetres * 1.1)} m</strong>`;
+      cabinetResult.hidden = false;
     });
   </script>
 </body>
