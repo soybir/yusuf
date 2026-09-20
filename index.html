@@ -52,6 +52,12 @@
     .edge-label { position: absolute; z-index: 2; padding: 1px 3px; border-radius: 3px; background: rgba(255,255,255,.82); font-size: .62rem; font-weight: 800; line-height: 1; white-space: nowrap; }
     .edge-top { top: 2px; left: 50%; transform: translateX(-50%); }
     .edge-side { top: 50%; right: 2px; transform: translate(42%, -50%) rotate(-90deg); transform-origin: center; }
+    .cut-order { position: absolute; z-index: 4; top: 2px; left: 2px; display: grid; place-items: center; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 9px; background: #17212b; color: #fff; font-size: .65rem; line-height: 1; }
+    .band-mark { position: absolute; z-index: 3; background: #d92d20; box-shadow: 0 0 0 1px rgba(255,255,255,.55); }
+    .band-horizontal { right: 0; bottom: 0; left: 0; height: 4px; }
+    .band-vertical { top: 0; right: 0; bottom: 0; width: 4px; }
+    .legend-row { display: flex; align-items: center; gap: 7px; margin-top: 7px; font-size: .85rem; }
+    .legend-band { width: 24px; height: 4px; border-radius: 2px; background: #d92d20; }
     .piece:nth-child(4n+1) { background: rgba(105, 182, 255, .82); }
     .piece:nth-child(4n+2) { background: rgba(255, 190, 92, .84); }
     .piece:nth-child(4n+3) { background: rgba(129, 211, 160, .84); }
@@ -384,6 +390,7 @@
       ).sort((a, b) => b.area - a.area);
 
       const sheetList = [];
+      let cutOrder = 0;
       for (const piece of pieces) {
         const fitsNormal = piece.length <= sheetLength && piece.width <= sheetWidth;
         const fitsRotated = allowRotation && piece.width <= sheetLength && piece.length <= sheetWidth;
@@ -405,6 +412,7 @@
         const free = sheet.free[placement.freeIndex];
         sheet.pieces.push({
           ...piece,
+          cutOrder: cutOrder += 1,
           x: free.x,
           y: free.y,
           displayLength: placement.length,
@@ -417,7 +425,7 @@
 
       const totalPartArea = pieces.reduce((total, piece) => total + piece.area, 0);
       const efficiency = totalPartArea / (sheetList.length * sheetLength * sheetWidth) * 100;
-      sheetSummary.innerHTML = `Gerekli tabaka: <strong>${sheetList.length}</strong><br>Malzeme kullanım oranı: <strong>%${format(efficiency)}</strong><br>Kesim tipi: <strong>Yatar testere — tam boy düz kesim</strong>`;
+      sheetSummary.innerHTML = `Gerekli tabaka: <strong>${sheetList.length}</strong><br>Malzeme kullanım oranı: <strong>%${format(efficiency)}</strong><br>Kesim tipi: <strong>Yatar testere — tam boy düz kesim</strong><div class="legend-row"><span class="legend-band"></span>Kırmızı çizgi: ön kenar bandı · Siyah numara: kesim sırası</div>`;
       sheetsContainer.replaceChildren();
       sheetList.forEach((sheet, index) => {
         const card = document.createElement('div');
@@ -435,7 +443,10 @@
           element.style.top = `${piece.y / sheetWidth * 100}%`;
           element.style.width = `${piece.displayLength / sheetLength * 100}%`;
           element.style.height = `${piece.displayWidth / sheetWidth * 100}%`;
-          element.setAttribute('aria-label', `${piece.name}, ${format(piece.displayLength)} × ${format(piece.displayWidth)} santimetre`);
+          element.setAttribute('aria-label', `${piece.cutOrder}. kesim, ${piece.name}, ${format(piece.displayLength)} × ${format(piece.displayWidth)} santimetre, ön kenar bantlı`);
+          const order = document.createElement('span');
+          order.className = 'cut-order';
+          order.textContent = String(piece.cutOrder);
           const name = document.createElement('span');
           name.className = 'piece-name';
           name.textContent = piece.name;
@@ -445,7 +456,10 @@
           const widthLabel = document.createElement('span');
           widthLabel.className = 'edge-label edge-side';
           widthLabel.textContent = `${format(piece.displayWidth)} cm`;
-          element.append(name, lengthLabel, widthLabel);
+          const band = document.createElement('span');
+          band.className = `band-mark ${piece.rotated ? 'band-vertical' : 'band-horizontal'}`;
+          band.setAttribute('aria-hidden', 'true');
+          element.append(name, lengthLabel, widthLabel, order, band);
           board.append(element);
         });
         card.append(title, board);
