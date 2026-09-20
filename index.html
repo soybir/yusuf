@@ -24,7 +24,7 @@
     input, select { border: 1px solid #c9d1d9; padding: 0 14px; background: #fff; font-size: 1.1rem; }
     button { margin-top: 20px; border: 0; background: #17212b; color: #fff; font-weight: 800; font-size: 1.1rem; }
     button:active { transform: scale(.99); }
-    #error, #cabinet-error { color: #b42318; font-weight: 700; margin-top: 14px; }
+    #error, #cabinet-error, #sheet-error { color: #b42318; font-weight: 700; margin-top: 14px; }
     #result { margin-top: 18px; }
     .summary { padding: 14px; border-radius: 12px; background: #eaf4ff; font-weight: 750; }
     .row { display: grid; grid-template-columns: 48px 1fr; gap: 10px; align-items: center; padding: 13px 0; border-bottom: 1px solid #e8ebef; }
@@ -38,6 +38,21 @@
     th { color: #5d6773; font-size: .85rem; }
     td:first-child { font-weight: 700; }
     .band-total { margin-top: 15px; padding: 14px; border-radius: 12px; background: #eef8ef; line-height: 1.55; }
+    .sheet-settings { margin-top: 18px; padding-top: 18px; border-top: 2px solid #e5e9ed; }
+    .sheet-settings h2 { margin: 0 0 4px; font-size: 1.2rem; }
+    .sheet-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 10px; }
+    .check-row { display: flex; align-items: center; gap: 10px; margin-top: 15px; font-weight: 700; }
+    .check-row input { width: 23px; min-height: 23px; margin: 0; }
+    .sheet-summary { margin: 17px 0 10px; padding: 14px; border-radius: 12px; background: #fff5df; line-height: 1.55; }
+    .sheet-card { margin-top: 18px; }
+    .sheet-title { margin: 0 0 8px; font-size: 1rem; }
+    .sheet { position: relative; width: 100%; overflow: hidden; border: 2px solid #17212b; border-radius: 5px; background: repeating-linear-gradient(45deg, #f8eedb, #f8eedb 8px, #f5e8cf 8px, #f5e8cf 16px); }
+    .piece { position: absolute; display: grid; place-items: center; overflow: hidden; border: 1px solid rgba(23,33,43,.65); color: #17212b; font-size: .72rem; font-weight: 750; text-align: center; line-height: 1.15; padding: 2px; }
+    .piece:nth-child(4n+1) { background: rgba(105, 182, 255, .82); }
+    .piece:nth-child(4n+2) { background: rgba(255, 190, 92, .84); }
+    .piece:nth-child(4n+3) { background: rgba(129, 211, 160, .84); }
+    .piece:nth-child(4n+4) { background: rgba(207, 162, 255, .82); }
+    @media (max-width: 430px) { .sheet-grid { grid-template-columns: 1fr; } }
     [hidden] { display: none !important; }
   </style>
 </head>
@@ -104,6 +119,34 @@
         </div>
         <div class="band-total" id="band-total"></div>
         <p class="muted">Ölçüler cm’dir. Bant hesabı yalnız parçaların ön kenarları içindir.</p>
+        <div class="sheet-settings">
+          <h2>Tabaka yerleşimi</h2>
+          <p class="muted">Kesim listesini tabakanın üzerine otomatik yerleştirir.</p>
+          <div class="sheet-grid">
+            <div>
+              <label for="sheet-length">Tabaka boyu (cm)</label>
+              <input id="sheet-length" type="number" min="1" step="0.1" inputmode="decimal" value="280">
+            </div>
+            <div>
+              <label for="sheet-width">Tabaka eni (cm)</label>
+              <input id="sheet-width" type="number" min="1" step="0.1" inputmode="decimal" value="207">
+            </div>
+            <div>
+              <label for="kerf">Testere payı (cm)</label>
+              <input id="kerf" type="number" min="0" step="0.1" inputmode="decimal" value="0.4">
+            </div>
+          </div>
+          <label class="check-row" for="allow-rotation">
+            <input id="allow-rotation" type="checkbox">
+            Parçalar 90° döndürülebilir
+          </label>
+          <button type="button" id="optimize-button">Tabakaya yerleştir</button>
+          <p id="sheet-error" role="alert" hidden></p>
+          <div id="sheet-result" hidden>
+            <div class="sheet-summary" id="sheet-summary"></div>
+            <div id="sheets"></div>
+          </div>
+        </div>
       </div>
     </section>
   </main>
@@ -179,6 +222,7 @@
     const cabinetRule = document.querySelector('#cabinet-rule');
     const cutRows = document.querySelector('#cut-rows');
     const bandTotal = document.querySelector('#band-total');
+    let currentCutParts = [];
 
     cabinetForm.addEventListener('submit', (event) => {
       event.preventDefault();
@@ -243,7 +287,163 @@
         : 'Üst dolap: yanlar tam boy; alt, üst ve raflar yanların arasında.';
       const bandMetres = totalBandCm / 100;
       bandTotal.innerHTML = `Toplam ön kenar bandı: <strong>${format(bandMetres)} m</strong><br>%10 fireli: <strong>${format(bandMetres * 1.1)} m</strong>`;
+      currentCutParts = parts
+        .filter((part) => part.quantity > 0)
+        .map((part) => ({ ...part, quantity: part.quantity * cabinetQuantity }));
+      sheetResult.hidden = true;
       cabinetResult.hidden = false;
+    });
+
+    const optimizeButton = document.querySelector('#optimize-button');
+    const sheetError = document.querySelector('#sheet-error');
+    const sheetResult = document.querySelector('#sheet-result');
+    const sheetSummary = document.querySelector('#sheet-summary');
+    const sheetsContainer = document.querySelector('#sheets');
+
+    function intersects(a, b) {
+      return a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
+    }
+
+    function contains(a, b) {
+      return b.x >= a.x && b.y >= a.y && b.x + b.width <= a.x + a.width && b.y + b.height <= a.y + a.height;
+    }
+
+    function splitFreeRectangles(freeRectangles, used) {
+      const split = [];
+      freeRectangles.forEach((free) => {
+        if (!intersects(free, used)) {
+          split.push(free);
+          return;
+        }
+        if (used.x > free.x) split.push({ x: free.x, y: free.y, width: used.x - free.x, height: free.height });
+        if (used.x + used.width < free.x + free.width) {
+          split.push({ x: used.x + used.width, y: free.y, width: free.x + free.width - used.x - used.width, height: free.height });
+        }
+        if (used.y > free.y) split.push({ x: free.x, y: free.y, width: free.width, height: used.y - free.y });
+        if (used.y + used.height < free.y + free.height) {
+          split.push({ x: free.x, y: used.y + used.height, width: free.width, height: free.y + free.height - used.y - used.height });
+        }
+      });
+      return split.filter((rect, index, all) =>
+        rect.width > 0.01 && rect.height > 0.01 &&
+        !all.some((other, otherIndex) => otherIndex !== index && contains(other, rect))
+      );
+    }
+
+    function findBestPlacement(sheetList, piece, sheetLength, sheetWidth, kerf, allowRotation) {
+      let best = null;
+      const orientations = [{ length: piece.length, width: piece.width, rotated: false }];
+      if (allowRotation && Math.abs(piece.length - piece.width) > 0.01) {
+        orientations.push({ length: piece.width, width: piece.length, rotated: true });
+      }
+      sheetList.forEach((sheet, sheetIndex) => {
+        sheet.free.forEach((free, freeIndex) => {
+          orientations.forEach((orientation) => {
+            const packedWidth = orientation.length + (orientation.length < free.width - 0.001 ? kerf : 0);
+            const packedHeight = orientation.width + (orientation.width < free.height - 0.001 ? kerf : 0);
+            if (packedWidth <= free.width + 0.001 && packedHeight <= free.height + 0.001) {
+              const shortSide = Math.min(free.width - packedWidth, free.height - packedHeight);
+              const longSide = Math.max(free.width - packedWidth, free.height - packedHeight);
+              const score = shortSide * 10000 + longSide;
+              if (!best || score < best.score) {
+                best = { sheetIndex, freeIndex, score, packedWidth, packedHeight, ...orientation };
+              }
+            }
+          });
+        });
+      });
+      return best;
+    }
+
+    optimizeButton.addEventListener('click', () => {
+      sheetError.hidden = true;
+      sheetResult.hidden = true;
+      const sheetLength = Number(document.querySelector('#sheet-length').value);
+      const sheetWidth = Number(document.querySelector('#sheet-width').value);
+      const kerf = Number(document.querySelector('#kerf').value);
+      const allowRotation = document.querySelector('#allow-rotation').checked;
+
+      if (!currentCutParts.length) {
+        sheetError.textContent = 'Önce kesim listesini çıkar.';
+        sheetError.hidden = false;
+        return;
+      }
+      if (![sheetLength, sheetWidth].every((value) => Number.isFinite(value) && value > 0) ||
+          !Number.isFinite(kerf) || kerf < 0) {
+        sheetError.textContent = 'Tabaka ve testere payı ölçülerini doğru gir.';
+        sheetError.hidden = false;
+        return;
+      }
+
+      const pieces = currentCutParts.flatMap((part) =>
+        Array.from({ length: part.quantity }, (_, index) => ({
+          name: `${part.name} ${index + 1}`,
+          length: part.length,
+          width: part.width,
+          area: part.length * part.width,
+        }))
+      ).sort((a, b) => b.area - a.area);
+
+      const sheetList = [];
+      for (const piece of pieces) {
+        const fitsNormal = piece.length <= sheetLength && piece.width <= sheetWidth;
+        const fitsRotated = allowRotation && piece.width <= sheetLength && piece.length <= sheetWidth;
+        if (!fitsNormal && !fitsRotated) {
+          sheetError.textContent = `${piece.name} (${format(piece.length)} × ${format(piece.width)} cm) tabakaya sığmıyor.`;
+          sheetError.hidden = false;
+          return;
+        }
+
+        if (!sheetList.length) {
+          sheetList.push({ free: [{ x: 0, y: 0, width: sheetLength, height: sheetWidth }], pieces: [] });
+        }
+        let placement = findBestPlacement(sheetList, piece, sheetLength, sheetWidth, kerf, allowRotation);
+        if (!placement) {
+          sheetList.push({ free: [{ x: 0, y: 0, width: sheetLength, height: sheetWidth }], pieces: [] });
+          placement = findBestPlacement(sheetList, piece, sheetLength, sheetWidth, kerf, allowRotation);
+        }
+        const sheet = sheetList[placement.sheetIndex];
+        const free = sheet.free[placement.freeIndex];
+        const used = { x: free.x, y: free.y, width: placement.packedWidth, height: placement.packedHeight };
+        sheet.pieces.push({
+          ...piece,
+          x: free.x,
+          y: free.y,
+          displayLength: placement.length,
+          displayWidth: placement.width,
+          rotated: placement.rotated,
+        });
+        sheet.free = splitFreeRectangles(sheet.free, used);
+      }
+
+      const totalPartArea = pieces.reduce((total, piece) => total + piece.area, 0);
+      const efficiency = totalPartArea / (sheetList.length * sheetLength * sheetWidth) * 100;
+      sheetSummary.innerHTML = `Gerekli tabaka: <strong>${sheetList.length}</strong><br>Malzeme kullanım oranı: <strong>%${format(efficiency)}</strong>`;
+      sheetsContainer.replaceChildren();
+      sheetList.forEach((sheet, index) => {
+        const card = document.createElement('div');
+        card.className = 'sheet-card';
+        const title = document.createElement('h3');
+        title.className = 'sheet-title';
+        title.textContent = `Tabaka ${index + 1} — ${format(sheetLength)} × ${format(sheetWidth)} cm`;
+        const board = document.createElement('div');
+        board.className = 'sheet';
+        board.style.aspectRatio = `${sheetLength} / ${sheetWidth}`;
+        sheet.pieces.forEach((piece) => {
+          const element = document.createElement('div');
+          element.className = 'piece';
+          element.style.left = `${piece.x / sheetLength * 100}%`;
+          element.style.top = `${piece.y / sheetWidth * 100}%`;
+          element.style.width = `${piece.displayLength / sheetLength * 100}%`;
+          element.style.height = `${piece.displayWidth / sheetWidth * 100}%`;
+          element.textContent = `${piece.name}\n${format(piece.length)}×${format(piece.width)}`;
+          element.style.whiteSpace = 'pre-line';
+          board.append(element);
+        });
+        card.append(title, board);
+        sheetsContainer.append(card);
+      });
+      sheetResult.hidden = false;
     });
   </script>
 </body>
