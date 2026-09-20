@@ -124,8 +124,8 @@
         <div class="band-total" id="band-total"></div>
         <p class="muted">Ölçüler cm’dir. Bant hesabı yalnız parçaların ön kenarları içindir.</p>
         <div class="sheet-settings">
-          <h2>Tabaka yerleşimi</h2>
-          <p class="muted">Kesim listesini tabakanın üzerine otomatik yerleştirir.</p>
+          <h2>Yatar testere yerleşimi</h2>
+          <p class="muted">Parçaları baştan sona düz kesim yapılabilen şeritlere yerleştirir.</p>
           <div class="sheet-grid">
             <div>
               <label for="sheet-length">Tabaka boyu (cm)</label>
@@ -144,7 +144,7 @@
             <input id="allow-rotation" type="checkbox">
             Parçalar 90° döndürülebilir
           </label>
-          <button type="button" id="optimize-button">Tabakaya yerleştir</button>
+          <button type="button" id="optimize-button">Yatar testereye yerleştir</button>
           <p id="sheet-error" role="alert" hidden></p>
           <div id="sheet-result" hidden>
             <div class="sheet-summary" id="sheet-summary"></div>
@@ -304,34 +304,26 @@
     const sheetSummary = document.querySelector('#sheet-summary');
     const sheetsContainer = document.querySelector('#sheets');
 
-    function intersects(a, b) {
-      return a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
-    }
-
-    function contains(a, b) {
-      return b.x >= a.x && b.y >= a.y && b.x + b.width <= a.x + a.width && b.y + b.height <= a.y + a.height;
-    }
-
-    function splitFreeRectangles(freeRectangles, used) {
-      const split = [];
-      freeRectangles.forEach((free) => {
-        if (!intersects(free, used)) {
-          split.push(free);
-          return;
+    function splitGuillotineSpace(free, placement) {
+      const rightWidth = free.width - placement.packedWidth;
+      const bottomHeight = free.height - placement.packedHeight;
+      const next = [];
+      if (placement.splitDirection === 'vertical') {
+        if (rightWidth > 0.01) {
+          next.push({ x: free.x + placement.packedWidth, y: free.y, width: rightWidth, height: free.height });
         }
-        if (used.x > free.x) split.push({ x: free.x, y: free.y, width: used.x - free.x, height: free.height });
-        if (used.x + used.width < free.x + free.width) {
-          split.push({ x: used.x + used.width, y: free.y, width: free.x + free.width - used.x - used.width, height: free.height });
+        if (bottomHeight > 0.01) {
+          next.push({ x: free.x, y: free.y + placement.packedHeight, width: placement.length, height: bottomHeight });
         }
-        if (used.y > free.y) split.push({ x: free.x, y: free.y, width: free.width, height: used.y - free.y });
-        if (used.y + used.height < free.y + free.height) {
-          split.push({ x: free.x, y: used.y + used.height, width: free.width, height: free.y + free.height - used.y - used.height });
+      } else {
+        if (bottomHeight > 0.01) {
+          next.push({ x: free.x, y: free.y + placement.packedHeight, width: free.width, height: bottomHeight });
         }
-      });
-      return split.filter((rect, index, all) =>
-        rect.width > 0.01 && rect.height > 0.01 &&
-        !all.some((other, otherIndex) => otherIndex !== index && contains(other, rect))
-      );
+        if (rightWidth > 0.01) {
+          next.push({ x: free.x + placement.packedWidth, y: free.y, width: rightWidth, height: placement.width });
+        }
+      }
+      return next;
     }
 
     function findBestPlacement(sheetList, piece, sheetLength, sheetWidth, kerf, allowRotation) {
@@ -346,11 +338,14 @@
             const packedWidth = orientation.length + (orientation.length < free.width - 0.001 ? kerf : 0);
             const packedHeight = orientation.width + (orientation.width < free.height - 0.001 ? kerf : 0);
             if (packedWidth <= free.width + 0.001 && packedHeight <= free.height + 0.001) {
-              const shortSide = Math.min(free.width - packedWidth, free.height - packedHeight);
-              const longSide = Math.max(free.width - packedWidth, free.height - packedHeight);
+              const remainingWidth = free.width - packedWidth;
+              const remainingHeight = free.height - packedHeight;
+              const shortSide = Math.min(remainingWidth, remainingHeight);
+              const longSide = Math.max(remainingWidth, remainingHeight);
               const score = shortSide * 10000 + longSide;
               if (!best || score < best.score) {
-                best = { sheetIndex, freeIndex, score, packedWidth, packedHeight, ...orientation };
+                const splitDirection = remainingWidth > remainingHeight ? 'vertical' : 'horizontal';
+                best = { sheetIndex, freeIndex, score, packedWidth, packedHeight, splitDirection, ...orientation };
               }
             }
           });
@@ -408,7 +403,6 @@
         }
         const sheet = sheetList[placement.sheetIndex];
         const free = sheet.free[placement.freeIndex];
-        const used = { x: free.x, y: free.y, width: placement.packedWidth, height: placement.packedHeight };
         sheet.pieces.push({
           ...piece,
           x: free.x,
@@ -417,12 +411,13 @@
           displayWidth: placement.width,
           rotated: placement.rotated,
         });
-        sheet.free = splitFreeRectangles(sheet.free, used);
+        const nextFree = splitGuillotineSpace(free, placement);
+        sheet.free.splice(placement.freeIndex, 1, ...nextFree);
       }
 
       const totalPartArea = pieces.reduce((total, piece) => total + piece.area, 0);
       const efficiency = totalPartArea / (sheetList.length * sheetLength * sheetWidth) * 100;
-      sheetSummary.innerHTML = `Gerekli tabaka: <strong>${sheetList.length}</strong><br>Malzeme kullanım oranı: <strong>%${format(efficiency)}</strong>`;
+      sheetSummary.innerHTML = `Gerekli tabaka: <strong>${sheetList.length}</strong><br>Malzeme kullanım oranı: <strong>%${format(efficiency)}</strong><br>Kesim tipi: <strong>Yatar testere — tam boy düz kesim</strong>`;
       sheetsContainer.replaceChildren();
       sheetList.forEach((sheet, index) => {
         const card = document.createElement('div');
