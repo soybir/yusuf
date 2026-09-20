@@ -47,7 +47,11 @@
     .sheet-card { margin-top: 18px; }
     .sheet-title { margin: 0 0 8px; font-size: 1rem; }
     .sheet { position: relative; width: 100%; overflow: hidden; border: 2px solid #17212b; border-radius: 5px; background: repeating-linear-gradient(45deg, #f8eedb, #f8eedb 8px, #f5e8cf 8px, #f5e8cf 16px); }
-    .piece { position: absolute; display: grid; place-items: center; overflow: hidden; border: 1px solid rgba(23,33,43,.65); color: #17212b; font-size: .72rem; font-weight: 750; text-align: center; line-height: 1.15; padding: 2px; }
+    .piece { position: absolute; overflow: hidden; border: 1px solid rgba(23,33,43,.65); color: #17212b; font-size: .72rem; font-weight: 750; text-align: center; line-height: 1.15; }
+    .piece-name { position: absolute; inset: 0; display: grid; place-items: center; padding: 13px 18px; overflow: hidden; }
+    .edge-label { position: absolute; z-index: 2; padding: 1px 3px; border-radius: 3px; background: rgba(255,255,255,.82); font-size: .62rem; font-weight: 800; line-height: 1; white-space: nowrap; }
+    .edge-top { top: 2px; left: 50%; transform: translateX(-50%); }
+    .edge-side { top: 50%; right: 2px; transform: translate(42%, -50%) rotate(-90deg); transform-origin: center; }
     .piece:nth-child(4n+1) { background: rgba(105, 182, 255, .82); }
     .piece:nth-child(4n+2) { background: rgba(255, 190, 92, .84); }
     .piece:nth-child(4n+3) { background: rgba(129, 211, 160, .84); }
@@ -436,8 +440,17 @@
           element.style.top = `${piece.y / sheetWidth * 100}%`;
           element.style.width = `${piece.displayLength / sheetLength * 100}%`;
           element.style.height = `${piece.displayWidth / sheetWidth * 100}%`;
-          element.textContent = `${piece.name}\n${format(piece.length)}×${format(piece.width)}`;
-          element.style.whiteSpace = 'pre-line';
+          element.setAttribute('aria-label', `${piece.name}, ${format(piece.displayLength)} × ${format(piece.displayWidth)} santimetre`);
+          const name = document.createElement('span');
+          name.className = 'piece-name';
+          name.textContent = piece.name;
+          const lengthLabel = document.createElement('span');
+          lengthLabel.className = 'edge-label edge-top';
+          lengthLabel.textContent = `${format(piece.displayLength)} cm`;
+          const widthLabel = document.createElement('span');
+          widthLabel.className = 'edge-label edge-side';
+          widthLabel.textContent = `${format(piece.displayWidth)} cm`;
+          element.append(name, lengthLabel, widthLabel);
           board.append(element);
         });
         card.append(title, board);
